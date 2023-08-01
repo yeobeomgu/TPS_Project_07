@@ -3,6 +3,7 @@
 
 #include "TPSPlayer.h"
 #include "Bullet.h"
+#include "EnemyFSM.h"
 
 // SpringArm 컴포넌트를 사용할 수 있게
 #include <GameFramework/SpringArmComponent.h>
@@ -204,6 +205,12 @@ void ATPSPlayer::InputFire()
 				FVector force = -hitInfo.ImpactNormal * hitComp->GetMass() * 50000;
 				//그 방향으로 날려버리고 싶다.
 				hitComp->AddForce(force);
+			}
+			auto enemy = hitInfo.GetActor()->GetDefaultSubobjectByName(TEXT("FSM"));
+			if (enemy)
+			{
+				auto enemyFSM = Cast<UEnemyFSM>(enemy);
+				enemyFSM->OnDamageProcess();
 			}
 		}
 
