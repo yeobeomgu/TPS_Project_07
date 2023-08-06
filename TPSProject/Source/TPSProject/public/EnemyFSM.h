@@ -81,4 +81,8 @@ public:
 	//아래로 사라지는 속도
 	UPROPERTY(EditAnywhere, Category = FSM)
 		float dieSpeed = 50.0f;
+
+	//사용중인 애니메이션 블루프린트
+	UPROPERTY()
+		class UEnemyAnim* anim;
 };

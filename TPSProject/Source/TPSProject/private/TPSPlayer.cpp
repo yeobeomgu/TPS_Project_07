@@ -4,12 +4,14 @@
 #include "TPSPlayer.h"
 #include "Bullet.h"
 #include "EnemyFSM.h"
+#include "PlayerAnim.h"
 
 // SpringArm 컴포넌트를 사용할 수 있게
 #include <GameFramework/SpringArmComponent.h>
 #include <Camera/CameraComponent.h>
 #include <Blueprint/UserWidget.h>
 #include <Kismet/GameplayStatics.h>
+#include <GameFramework/CharacterMovementComponent.h>
 
 // Sets default values
 // 생성자
@@ -44,30 +46,38 @@ ATPSPlayer::ATPSPlayer()
 	JumpMaxCount = 2;
 
 	gunMeshComp = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("GunMeshComponent"));
-	gunMeshComp->SetupAttachment(GetMesh());
+	gunMeshComp->SetupAttachment(GetMesh(), TEXT("hand_rSocket"));
 	ConstructorHelpers::FObjectFinder<USkeletalMesh>TempGunMesh(TEXT("/Script/Engine.SkeletalMesh'/Game/FPWeapon/Mesh/SK_FPGun.SK_FPGun'"));
 
 	if (TempGunMesh.Succeeded())
 	{
 		gunMeshComp->SetSkeletalMesh(TempGunMesh.Object);
-		gunMeshComp->SetRelativeLocation(FVector(-14, 52, 120));
+		gunMeshComp->SetRelativeLocation(FVector(-17, 10, -3));
+		gunMeshComp->SetRelativeRotation(FRotator(0, 90, 0));
+
 	}
 
 	//스나이퍼 컴포넌트 등록
 	sniperGunComp = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("SniperGunComp"));
 	//부모 컴포넌트를 Mesh 컴포넌트로 설정
-	sniperGunComp->SetupAttachment(GetMesh());
+	sniperGunComp->SetupAttachment(GetMesh(), TEXT("hand_rSocket"));
 	//스태틱메시 데이터 로드
-	ConstructorHelpers::FObjectFinder<UStaticMesh>TempSniperMesh(TEXT("/Script/Engine.StaticMesh'/Game/SniperGun/sniper1.sniper1'"));
+    ConstructorHelpers::FObjectFinder<UStaticMesh>TempSniperMesh(TEXT("/Script/Engine.StaticMesh'/Game/SniperGun/sniper1.sniper1'"));
 	//데이터 로드에 성공했다면
 	if (TempSniperMesh.Succeeded())
 	{
 		//스테틱메시 데이터 할당
 		sniperGunComp->SetStaticMesh(TempSniperMesh.Object);
 		//위치 조정
-		sniperGunComp->SetRelativeLocation(FVector(-22, 55, 120));
+		sniperGunComp->SetRelativeLocation(FVector(-22, 57, 141));
+		sniperGunComp->SetRelativeRotation(FRotator(0, 90, 0));
 		// 크기 조정
 		sniperGunComp->SetRelativeScale3D(FVector(0.15f));
+	}
+	ConstructorHelpers::FObjectFinder<USoundBase> tempSound(TEXT("/Script/Engine.SoundWave'/Game/SniperGun/Rifle.Rifle'"));
+	if (tempSound.Succeeded())
+	{
+		bulletSound = tempSound.Object;
 	}
 }
 
@@ -75,6 +85,9 @@ ATPSPlayer::ATPSPlayer()
 void ATPSPlayer::BeginPlay()
 {
 	Super::BeginPlay();
+
+	//초기 속도를 걷기로 설정
+	GetCharacterMovement()->MaxWalkSpeed = walkSpeed;
 	
 	//스나이퍼 UI 위젯 인스턴스 생성
 	_sniperUI = CreateWidget(GetWorld(), sniperUIFactory);
@@ -120,6 +133,25 @@ void ATPSPlayer::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent
 	PlayerInputComponent->BindAction(TEXT("Sniper"), IE_Pressed, this, &ATPSPlayer::SniperAim);
 	PlayerInputComponent->BindAction(TEXT("Sniper"), IE_Released, this, &ATPSPlayer::SniperAim);
 
+	PlayerInputComponent->BindAction(TEXT("Run"), IE_Pressed, this, &ATPSPlayer::InputRun);
+	PlayerInputComponent->BindAction(TEXT("Run"), IE_Released, this, &ATPSPlayer::InputRun);
+
+
+}
+
+void ATPSPlayer::InputRun()
+{
+	auto movement = GetCharacterMovement();
+	//현재 달리기 모드라면
+	if (movement->MaxWalkSpeed > walkSpeed)
+	{
+		//걷기 모드로 전환
+		movement->MaxWalkSpeed = walkSpeed;
+	}
+	else
+	{
+		movement->MaxWalkSpeed = runSpeed;
+	}
 }
 
 void ATPSPlayer::Turn(float value)
@@ -167,6 +199,16 @@ void ATPSPlayer::Move()
 
 void ATPSPlayer::InputFire()
 {
+	UGameplayStatics::PlaySound2D(GetWorld(), bulletSound);
+
+	//카메라 셰이크 재생
+	auto controller = GetWorld()->GetFirstPlayerController();
+	controller->PlayerCameraManager->StartCameraShake(cameraShake);
+
+	//공격 애니메이션 재생
+	auto anim = Cast<UPlayerAnim>(GetMesh()->GetAnimInstance());
+	anim->PlayAttackAnim();
+
 	//유탄총 사용시
 	if (bUsingGrenadeGun)
 	{
@@ -260,4 +302,6 @@ void ATPSPlayer::SniperAim()
 		_crosshairUI->AddToViewport();
 	}
 }
+
+
 

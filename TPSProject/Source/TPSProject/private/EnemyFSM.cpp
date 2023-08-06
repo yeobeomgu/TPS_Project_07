@@ -4,6 +4,7 @@
 #include "EnemyFSM.h"
 #include "TPSPlayer.h"
 #include "Enemy.h"
+#include "EnemyAnim.h"
 #include <Kismet/GameplayStatics.h>
 #include <Components/CapsuleComponent.h>
 // Sets default values for this component's properties
@@ -28,6 +29,8 @@ void UEnemyFSM::BeginPlay()
 	target = Cast<ATPSPlayer>(actor);
 	//소유 객체 가져오기
 	me = Cast<AEnemy>(GetOwner());
+	//UEnemyAnim 할당
+	anim = Cast<UEnemyAnim>(me->GetMesh()->GetAnimInstance());
 
 	// ...
 	
@@ -72,6 +75,8 @@ void UEnemyFSM::IdleState()
 		mState = EEnemyState::Move;
 		//경과 시간 초기화
 		currentTime = 0;
+
+		anim->animState = mState;
 	}
 
 }
@@ -91,6 +96,13 @@ void UEnemyFSM::MoveState()
 	{
 		//공격 상태로 전환
 		mState = EEnemyState::Attack;
+		//애니메이션 상태 동기화
+		anim->animState = mState;
+		//공격 애니메이션 재생 활성화
+		anim->bAttackPlay = true;
+		//공격 상태 전환 시 대기 시간이 바로 끝나도록
+		currentTime = attackDelayTime;
+
 	}
 }
 
@@ -102,9 +114,10 @@ void UEnemyFSM::AttackState()
 	if (currentTime > attackDelayTime)
 	{
 		//공격하고 싶다
-		
+
 		//경과 시간 초기화
 		currentTime = 0;
+		anim->bAttackPlay = true;
 	}
 
 	//목표 : 타깃과 공격 범위를 벗어나면 상태를 이동으로 전환하고 싶다.
@@ -112,8 +125,13 @@ void UEnemyFSM::AttackState()
 	float distance = FVector::Distance(target->GetActorLocation(), me->GetActorLocation());
 	//타깃과의 거리가 공격 범위를 벗어났으니깐
 	if (distance > attackRange)
+	{
 		//상태를 이동으로 전환
 		mState = EEnemyState::Move;
+		//애니메이션 상태 동기화
+		anim->animState = mState;
+	}
+	
 }
 
 void UEnemyFSM::DamageState()
@@ -125,11 +143,18 @@ void UEnemyFSM::DamageState()
 		//대기 상태로 전환하고 싶다.
 		mState = EEnemyState::Idle;
 		currentTime = 0;
+		//애니메이션 상태 동기화
+		anim->animState = mState;
 	}
 }
 
 void UEnemyFSM::DieState()
 {
+	//죽음 애니메이션이 끝나지 않았다면 내려가지 않게 처리
+	if (anim->bDieDone == false)
+	{
+		return;
+	}
 	//계속 아래로 내려가고싶다.
 	//등속운동 P = P0 + vt
 	FVector P0 = me->GetActorLocation();
@@ -141,6 +166,7 @@ void UEnemyFSM::DieState()
 	{
 		me->Destroy();
 	}
+	anim->animState = mState;
 
 }
 
@@ -151,6 +177,13 @@ void UEnemyFSM::OnDamageProcess()
 	{
 		//상태를 피격으로 전환
 		mState = EEnemyState::Damage;
+		
+		currentTime = 0;
+
+		//피격 애니메이션 재생
+		int32 index = FMath::RandRange(0, 1);
+		FString sectionName = FString::Printf(TEXT("Damage%d"), 0);
+		anim->PlayDamageAnim(FName(*sectionName));
 	}
 
 	else
@@ -159,6 +192,10 @@ void UEnemyFSM::OnDamageProcess()
 		mState = EEnemyState::Die;
 		//캡슐 충돌체 비활성화
 		me->GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		//죽음 애니메이션 재생
+		anim->PlayDamageAnim(TEXT("Die"));
 	}
+	//애니메이션 상태 동기화
+	anim->animState = mState;
 }
 
